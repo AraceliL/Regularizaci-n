@@ -1,0 +1,31 @@
+apiVersion: apps/v1                          
+kind: Deployment                             
+metadata:
+  name: crud-db                    
+  labels:
+    app: bd-crud                          
+spec:
+  selector:                                  
+    matchLabels:                              
+      app: bd-crud
+      tier: backend
+  replicas: 1                                 
+  template:                                  
+    metadata:
+      labels:
+        app: bd-crud                       
+        tier: backend                             
+    spec:
+      containers:                             
+      - name: db-service                       
+        image: ara17240145/recuperacionbd   
+        ports:                                
+        - containerPort: 3306
+        volumeMounts:                       
+        - name: persistencia
+          mountPath: /var/lib/mysql
+      volumes:
+        - name: persistencia
+          persistentVolumeClaim:
+            claimName: persistencia-claim
+

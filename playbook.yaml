@@ -1,0 +1,186 @@
+---
+- name:  minikube con ansible
+  hosts: minikube
+  gather_facts: False
+      
+  tasks:
+    - name: crear el namespace
+        k8s:
+          state: present
+          definition:
+          apiVersion: v1
+          kind: Namespace       
+          metadata:
+              name: alango
+
+    -name: crear el volumen persistente 
+        k8s:
+          state: present
+          definition:
+          apiVersion: v1
+          kind: PersistentVolume                   
+          metadata:
+            namespace: alango
+            name: persistencia
+            labels:
+              type: local
+              spec:
+            storageClassName: persistentclass
+            capacity:
+              storage: 10Gi
+            accessModes:
+              - ReadWriteOnce
+            hostPath:
+              path: "/db"
+
+   -name: crear el volumen claim
+        k8s:
+          state: present
+          definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            namespace: alango
+            name: persistencia-claim
+            labels:
+              type: local
+          spec:
+            storageClassName: persistentclass
+            accessModes: 
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 10Gi
+
+   -name: deployment de la base de datos
+        k8s:
+          state: present
+          definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            namespace: alango
+            name: crud-db
+            labels:
+              app: bd-crud
+          spec:
+            selector:
+              matchLabels:
+                app: bd-crud
+                tier: backend
+            replicas: 1
+            template:
+              metadata:
+                labels:
+                  app: bd-crud
+                  tier: backend
+               spec:
+                containers:
+                - name: db-service
+                  image: ara17240145/recuperacionbd
+                  ports:
+                  - containerPort: 3306
+                  volumeMounts:
+                  - name: persistencia
+                    mountPath: /var/lib/mysql
+                volumes:
+                  - name: persistencia
+                    persistentVolumeClaim:
+                      claimName: persistencia-claim
+
+
+      -name: service de la base de datos
+        k8s:
+          state: present
+          definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            namespace: alango
+            name: crud-db
+            labels:
+              app: bd-crud
+              tier: backend
+          spec:
+            type: NodePort
+            ports:
+            - port: 3306
+              targetPort: 3306
+              protocol: TCP
+            selector:
+              app: bd-crud
+              tier: backend
+
+      -name: deploy de la app
+        k8s:
+          state: present
+          definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            namespace: alango
+            name: crud
+            labels:
+              app: productos
+          spec:
+            selector:
+              matchLabels:
+                app: productos
+                tier: frontend
+            replicas: 2
+            template:
+              metadata:
+                labels:
+                  app: productos
+                  tier: frontend
+              spec:
+                containers:
+                - name: crud-productos
+                  image: ara17240145/aplicacionrecuperacioc
+                  ports:
+                  - containerPort: 80
+
+      -name: service de la app
+        k8s:
+          state: present
+          definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            namespace: alango
+            name: servicio-crud
+            labels:
+              app: productos
+              tier: frontend
+          spec:
+            type: NodePort
+            ports:
+            - port: 80
+              protocol: TCP
+            selector:
+              app: productos
+              tier: frontend
+
+
+      -name: ingress
+        k8s:
+          state: present
+          definition:
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: ingress-conf
+            annotations:
+              nginx.ingress.kubernetes.io/rewrite-target: /
+          spec:
+            rules:
+            - host: app.slango.com
+              http:
+                paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: servicio-crud
+                      port:
+                        number: 80

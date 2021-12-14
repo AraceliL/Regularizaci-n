@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crud
+  labels:
+    app: productos
+spec:
+  selector:
+    matchLabels:
+      app: productos
+      tier: frontend
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: productos
+        tier: frontend
+    spec:
+      containers:
+      - name: crud-productos
+        image: ara17240145/recuperacionapp
+        ports: 
+        - containerPort: 80 
